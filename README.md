@@ -1,6 +1,6 @@
-# Postman API Testing Portfolio
+# Postman API Testing Portfolio (c) Tanya Kosachova
 
-A senior-level Postman project demonstrating API test design, automation, documentation, and CI readiness. Uses the public [ReqRes](https://reqres.in) API so the project runs without private services.
+Postman project demonstrating API test design, automation, documentation, and CI readiness. Uses the public [ReqRes](https://reqres.in) API so the project runs without private services.
 
 ---
 
