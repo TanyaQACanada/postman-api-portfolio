@@ -222,6 +222,8 @@ jobs:
           files: reports/newman-junit.xml
 ```
 
+**If you get 403 in CI:** ReqRes may block GitHub’s runners. The workflow sends a `User-Agent` and throttles requests. If 403 persists, create a free [ReqRes API key](https://app.reqres.in/?next=/api-keys), add a repo secret `REQRES_API_KEY` with that value, and re-run; the workflow passes it as `x-api-key`.
+
 ---
 
 ## Reporting

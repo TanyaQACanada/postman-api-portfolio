@@ -25,10 +25,14 @@ jobs:
         run: npm install -g newman newman-reporter-htmlextra
 
       - name: Run Postman collection
+        env:
+          REQRES_API_KEY: ${{ secrets.REQRES_API_KEY }}
         run: |
           mkdir -p reports
           newman run collection/API-Testing-Portfolio.postman_collection.json \
             --environment environments/local.postman_environment.json \
+            --env-var "apiKey=$REQRES_API_KEY" \
+            --delay-request 200 \
             --reporters cli,htmlextra,junit \
             --reporter-htmlextra-export reports/newman-report.html \
             --reporter-junit-export reports/newman-junit.xml

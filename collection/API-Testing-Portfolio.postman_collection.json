@@ -25,7 +25,11 @@
 					"    pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + pm.collectionVariables.get('authToken') });",
 					"}",
 					"// Reusable: ensure JSON accept",
-					"pm.request.headers.upsert({ key: 'Accept', value: 'application/json' });"
+					"pm.request.headers.upsert({ key: 'Accept', value: 'application/json' });",
+					"// ReqRes: User-Agent reduces 403 in CI (reqres.in/blog/qa-automation-with-reqres)",
+					"pm.request.headers.upsert({ key: 'User-Agent', value: 'reqres-qa-tests/1.0' });",
+					"var apiKey = pm.environment.get('apiKey') || pm.collectionVariables.get('apiKey');",
+					"if (apiKey) { pm.request.headers.upsert({ key: 'x-api-key', value: apiKey }); }"
 				]
 			}
 		},
