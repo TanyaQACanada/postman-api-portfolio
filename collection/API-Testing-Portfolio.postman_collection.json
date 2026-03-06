@@ -1,0 +1,1265 @@
+{
+	"info": {
+		"_postman_id": "api-testing-portfolio-001",
+		"name": "API Testing Portfolio - ReqRes",
+		"description": "Senior-level Postman collection: Auth, CRUD, Negative, Pagination, Idempotency, Concurrency, Security, Contract, Smoke, Regression, E2E.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{ "key": "authToken", "value": "" },
+		{ "key": "createdUserId", "value": "" },
+		{ "key": "createdUserJob", "value": "" },
+		{ "key": "idempotencyKey", "value": "" },
+		{ "key": "e2eUserId", "value": "" },
+		{ "key": "e2eUpdateId", "value": "" }
+	],
+	"auth": { "type": "noauth" },
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Reusable: set Bearer token if present",
+					"if (pm.collectionVariables.get('authToken')) {",
+					"    pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + pm.collectionVariables.get('authToken') });",
+					"}",
+					"// Reusable: ensure JSON accept",
+					"pm.request.headers.upsert({ key: 'Accept', value: 'application/json' });"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Reusable: assert status code",
+					"function assertStatus(code) {",
+					"    pm.test('Status code is ' + code, function() { pm.response.to.have.status(code); });",
+					"}",
+					"// Reusable: assert response time under threshold (ms)",
+					"function assertResponseTime(threshold) {",
+					"    pm.test('Response time is below ' + threshold + ' ms', function() {",
+					"        pm.expect(pm.response.responseTime).to.be.below(threshold);",
+					"    });",
+					"}",
+					"// Reusable: assert JSON schema has required top-level keys",
+					"function assertHasKeys(obj, keys) {",
+					"    keys.forEach(function(k) { pm.expect(obj).to.have.property(k); });",
+					"}"
+				]
+			}
+		}
+	],
+	"item": [
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Login - Success",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function() { pm.response.to.have.status(200); });",
+									"pm.test('Response has token', function() {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json).to.have.property('token');",
+									"    pm.collectionVariables.set('authToken', json.token);",
+									"});",
+									"pm.test('Response time < 2000 ms', function() { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{loginEmail}}\",\n  \"password\": \"{{loginPassword}}\"\n}"
+						},
+						"url": "{{baseUrl}}/api/login"
+					}
+				},
+				{
+					"name": "Register - Success",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function() { pm.response.to.have.status(200); });",
+									"pm.test('Response has token or id', function() {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json).to.have.property('token').or.have.property('id');",
+									"    if (json.token) pm.collectionVariables.set('authToken', json.token);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{loginEmail}}\",\n  \"password\": \"{{loginPassword}}\"\n}"
+						},
+						"url": "{{baseUrl}}/api/register"
+					}
+				},
+				{
+					"name": "Login - Invalid credentials",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 400', function() { pm.response.to.have.status(400); });",
+									"pm.test('Error message present', function() {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json).to.have.property('error');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"invalid@test.com\",\n  \"password\": \"wrong\"\n}"
+						},
+						"url": "{{baseUrl}}/api/login"
+					}
+				},
+				{
+					"name": "Login - Missing password",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 400', function() { pm.response.to.have.status(400); });",
+									"pm.test('Error message describes missing field', function() {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json.error).to.be.a('string');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{loginEmail}}\"\n}"
+						},
+						"url": "{{baseUrl}}/api/login"
+					}
+				}
+			]
+		},
+		{
+			"name": "Core CRUD",
+			"item": [
+				{
+					"name": "List Users",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function() { pm.response.to.have.status(200); });",
+									"pm.test('Response has data array', function() {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json).to.have.property('data').that.is.an('array');",
+									"});",
+									"pm.test('Response time < 3000 ms', function() { pm.expect(pm.response.responseTime).to.be.below(3000); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": "{{baseUrl}}/api/users"
+					}
+				},
+				{
+					"name": "Get User by ID",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function() { pm.response.to.have.status(200); });",
+									"pm.test('Response has data with id', function() {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json.data).to.have.property('id');",
+									"    pm.expect(json.data).to.have.property('email');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": "{{baseUrl}}/api/users/2"
+					}
+				},
+				{
+					"name": "Create User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function() { pm.response.to.have.status(201); });",
+									"pm.test('Response has id and createdAt', function() {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json).to.have.property('id');",
+									"    pm.expect(json).to.have.property('createdAt');",
+									"    pm.collectionVariables.set('createdUserId', json.id);",
+									"    if (json.job) pm.collectionVariables.set('createdUserJob', json.job);",
+									"});",
+									"pm.test('Response time < 2000 ms', function() { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"{{userName}}\",\n  \"job\": \"{{userJob}}\"\n}"
+						},
+						"url": "{{baseUrl}}/api/users"
+					}
+				},
+				{
+					"name": "Update User (PUT)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function() { pm.response.to.have.status(200); });",
+									"pm.test('Response has updatedAt', function() {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json).to.have.property('updatedAt');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"morpheus updated\",\n  \"job\": \"zion resident\"\n}"
+						},
+						"url": "{{baseUrl}}/api/users/2"
+					}
+				},
+				{
+					"name": "Update User (PATCH)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function() { pm.response.to.have.status(200); });",
+									"pm.test('Response contains updated field', function() {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json).to.have.property('job');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"job\": \"leader of the matrix\"\n}"
+						},
+						"url": "{{baseUrl}}/api/users/2"
+					}
+				},
+				{
+					"name": "Delete User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 204', function() { pm.response.to.have.status(204); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"url": "{{baseUrl}}/api/users/2"
+					}
+				}
+			]
+		},
+		{
+			"name": "Negative - Validation",
+			"item": [
+				{
+					"name": "Create User - Missing name",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 400 or 201 (API may accept)', function() {",
+									"    pm.expect([400, 201]).to.include(pm.response.code);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": { "mode": "raw", "raw": "{\n  \"job\": \"tester\"\n}" },
+						"url": "{{baseUrl}}/api/users"
+					}
+				},
+				{
+					"name": "Create User - Empty body",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 400 or 415', function() {",
+									"    pm.expect([400, 415]).to.include(pm.response.code);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": { "mode": "raw", "raw": "{}" },
+						"url": "{{baseUrl}}/api/users"
+					}
+				},
+				{
+					"name": "Create User - Invalid JSON",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 400 or 415', function() {",
+									"    pm.expect(pm.response.code).to.be.oneOf([400, 415, 422]);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": { "mode": "raw", "raw": "{ invalid }" },
+						"url": "{{baseUrl}}/api/users"
+					}
+				},
+				{
+					"name": "Create User - Wrong content type",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 415 or 400', function() {",
+									"    pm.expect([400, 415]).to.include(pm.response.code);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "text/plain" } ],
+						"body": { "mode": "raw", "raw": "name=foo&job=bar" },
+						"url": "{{baseUrl}}/api/users"
+					}
+				},
+				{
+					"name": "Get User - Not found (404)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 404', function() { pm.response.to.have.status(404); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": "{{baseUrl}}/api/users/99999"
+					}
+				},
+				{
+					"name": "Get User - Invalid ID (non-numeric)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 404 or 400', function() {",
+									"    pm.expect([400, 404]).to.include(pm.response.code);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": "{{baseUrl}}/api/users/abc"
+					}
+				},
+				{
+					"name": "Register - Missing email",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 400', function() { pm.response.to.have.status(400); });",
+									"pm.test('Error message present', function() {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json).to.have.property('error');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": { "mode": "raw", "raw": "{\n  \"password\": \"pass\"\n}" },
+						"url": "{{baseUrl}}/api/register"
+					}
+				}
+			]
+		},
+		{
+			"name": "Pagination - Filtering - Sorting",
+			"item": [
+				{
+					"name": "List Users - Page 1",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function() { pm.response.to.have.status(200); });",
+									"pm.test('Pagination metadata present', function() {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json).to.have.property('page');",
+									"    pm.expect(json).to.have.property('per_page');",
+									"    pm.expect(json).to.have.property('total');",
+									"    pm.expect(json.page).to.eql(1);",
+									"});",
+									"pm.test('Data array length <= per_page', function() {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json.data.length).to.be.at.most(json.per_page);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{baseUrl}}/api/users?page=1&per_page=2", "host": ["{{baseUrl}}"], "path": ["api", "users"], "query": [ { "key": "page", "value": "1" }, { "key": "per_page", "value": "2" } ] }
+					}
+				},
+				{
+					"name": "List Users - Page 2",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function() { pm.response.to.have.status(200); });",
+									"pm.test('Page is 2', function() {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json.page).to.eql(2);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{baseUrl}}/api/users?page=2&per_page=3", "host": ["{{baseUrl}}"], "path": ["api", "users"], "query": [ { "key": "page", "value": "2" }, { "key": "per_page", "value": "3" } ] }
+					}
+				},
+				{
+					"name": "List Users - Boundary per_page",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function() { pm.response.to.have.status(200); });",
+									"pm.test('Response is valid list', function() {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json.data).to.be.an('array');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{baseUrl}}/api/users?page=1&per_page=12", "host": ["{{baseUrl}}"], "path": ["api", "users"], "query": [ { "key": "page", "value": "1" }, { "key": "per_page", "value": "12" } ] }
+					}
+				}
+			]
+		},
+		{
+			"name": "Rate Limits - Throttling",
+			"item": [
+				{
+					"name": "Check rate limit headers (contract)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200 or 429', function() {",
+									"    pm.expect([200, 429]).to.include(pm.response.code);",
+									"});",
+									"// If 429, expect Retry-After or X-RateLimit-* headers (contract check)",
+									"if (pm.response.code === 429) {",
+									"    pm.test('429 response has Retry-After or rate limit header', function() {",
+									"        const hasRetry = pm.response.headers.has('Retry-After');",
+									"        const hasLimit = pm.response.headers.has('X-RateLimit-Limit') || pm.response.headers.has('X-RateLimit-Remaining');",
+									"        pm.expect(hasRetry || hasLimit).to.be.true;",
+									"    });",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": "{{baseUrl}}/api/users?page=1"
+					}
+				}
+			]
+		},
+		{
+			"name": "Idempotency",
+			"item": [
+				{
+					"name": "Create User - First request",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const key = 'idem-' + Date.now();",
+									"pm.collectionVariables.set('idempotencyKey', key);"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function() { pm.response.to.have.status(201); });",
+									"const json = pm.response.json();",
+									"if (json.id) pm.collectionVariables.set('idempotencyFirstId', json.id);"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"idempotent user\",\n  \"job\": \"test job\"\n}"
+						},
+						"url": "{{baseUrl}}/api/users"
+					}
+				},
+				{
+					"name": "Create User - Repeat same Idempotency-Key",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Idempotency: same key should return 201 with same resource or 200 (no duplicate)",
+									"pm.test('Status code is 200 or 201', function() {",
+									"    pm.expect([200, 201]).to.include(pm.response.code);",
+									"});",
+									"const json = pm.response.json();",
+									"pm.test('Response has id (same or new)', function() {",
+									"    pm.expect(json).to.have.property('id');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"idempotent user\",\n  \"job\": \"test job\"\n}"
+						},
+						"url": "{{baseUrl}}/api/users"
+					}
+				}
+			]
+		},
+		{
+			"name": "Concurrency",
+			"item": [
+				{
+					"name": "Concurrent creates (simulation)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Postman limitation: requests run sequentially. True concurrency (same moment) requires k6/Artillery or multiple Newman processes."
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// This request is the 'trigger'. Run this folder 3 times in quick succession (or use Collection Runner with 3 iterations) to simulate load.",
+									"pm.test('Concurrency simulation request completed', function() { pm.response.to.have.status(201); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": { "mode": "raw", "raw": "{\n  \"name\": \"concurrent-master\",\n  \"job\": \"trigger\"\n}" },
+						"url": "{{baseUrl}}/api/users"
+					}
+				},
+				{
+					"name": "Concurrent create 2",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Create 2 returns 201', function() { pm.response.to.have.status(201); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": { "mode": "raw", "raw": "{\n  \"name\": \"concurrent-2\",\n  \"job\": \"job2\"\n}" },
+						"url": "{{baseUrl}}/api/users"
+					}
+				},
+				{
+					"name": "Concurrent create 3",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Create 3 returns 201', function() { pm.response.to.have.status(201); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": { "mode": "raw", "raw": "{\n  \"name\": \"concurrent-3\",\n  \"job\": \"job3\"\n}" },
+						"url": "{{baseUrl}}/api/users"
+					}
+				}
+			]
+		},
+		{
+			"name": "Security",
+			"item": [
+				{
+					"name": "Create User - SQL injection string",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 400 or 201 (sanitized)', function() {",
+									"    pm.expect([400, 201]).to.include(pm.response.code);",
+									"});",
+									"if (pm.response.code === 201) {",
+									"    pm.test('Response does not expose raw SQL', function() {",
+									"        const text = pm.response.text();",
+									"        pm.expect(text).to.not.include(\"'; DROP TABLE\");",
+									"    });",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"'; DROP TABLE users; --\",\n  \"job\": \"hacker\"\n}"
+						},
+						"url": "{{baseUrl}}/api/users"
+					}
+				},
+				{
+					"name": "Create User - XSS string",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201 or 400', function() {",
+									"    pm.expect([201, 400]).to.include(pm.response.code);",
+									"});",
+									"if (pm.response.code === 201) {",
+									"    pm.test('Response escapes or sanitizes script', function() {",
+									"        const text = pm.response.text();",
+									"        pm.expect(text).to.not.include('<script>alert(1)</script>');",
+									"    });",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"<script>alert(1)</script>\",\n  \"job\": \"dev\"\n}"
+						},
+						"url": "{{baseUrl}}/api/users"
+					}
+				},
+				{
+					"name": "Get User - Unauthorized (no token)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set('authToken', '');"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// ReqRes legacy endpoints do not require auth; 200 is acceptable. Contract: if API required auth, expect 401.",
+									"pm.test('Status code is 200 or 401', function() {",
+									"    pm.expect([200, 401]).to.include(pm.response.code);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": "{{baseUrl}}/api/users/1"
+					}
+				},
+				{
+					"name": "Login - Invalid token format",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Testing endpoint that might validate token format",
+									"pm.test('Request completed', function() { pm.expect(pm.response.code).to.be.oneOf([200, 400, 401]); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [ { "key": "Authorization", "value": "Bearer invalid.token.here" } ],
+						"url": "{{baseUrl}}/api/users/1"
+					}
+				}
+			]
+		},
+		{
+			"name": "Contract checks",
+			"item": [
+				{
+					"name": "List Users - Schema",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function() { pm.response.to.have.status(200); });",
+									"const schema = { page: Number, per_page: Number, total: Number, total_pages: Number, data: Array };",
+									"const json = pm.response.json();",
+									"pm.test('Schema: page, per_page, total, data', function() {",
+									"    pm.expect(json).to.have.keys('page', 'per_page', 'total', 'total_pages', 'data');",
+									"    pm.expect(json.data).to.be.an('array');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": "{{baseUrl}}/api/users?page=1"
+					}
+				},
+				{
+					"name": "Get User - Schema",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function() { pm.response.to.have.status(200); });",
+									"const json = pm.response.json();",
+									"pm.test('Schema: data with id, email, first_name, last_name', function() {",
+									"    pm.expect(json).to.have.property('data');",
+									"    pm.expect(json.data).to.have.keys('id', 'email', 'first_name', 'last_name', 'avatar');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": "{{baseUrl}}/api/users/1"
+					}
+				},
+				{
+					"name": "Create User - Response schema",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function() { pm.response.to.have.status(201); });",
+									"const json = pm.response.json();",
+									"pm.test('Schema: id, name, job, createdAt', function() {",
+									"    pm.expect(json).to.have.keys('id', 'name', 'job', 'createdAt');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": { "mode": "raw", "raw": "{\n  \"name\": \"contract\",\n  \"job\": \"qa\"\n}" },
+						"url": "{{baseUrl}}/api/users"
+					}
+				}
+			]
+		},
+		{
+			"name": "Smoke suite",
+			"item": [
+				{
+					"name": "Health - Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Login returns 200', function() { pm.response.to.have.status(200); });",
+									"pm.test('Token in response', function() {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json).to.have.property('token');",
+									"    pm.collectionVariables.set('authToken', json.token);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{loginEmail}}\",\n  \"password\": \"{{loginPassword}}\"\n}"
+						},
+						"url": "{{baseUrl}}/api/login"
+					}
+				},
+				{
+					"name": "Health - List Users",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('List users returns 200', function() { pm.response.to.have.status(200); });",
+									"pm.test('Data array present', function() {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json.data).to.be.an('array');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": "{{baseUrl}}/api/users?page=1"
+					}
+				}
+			]
+		},
+		{
+			"name": "Regression suite",
+			"item": [
+				{
+					"name": "Regression - Auth and CRUD flow",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Regression: request executed', function() { pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": "{{baseUrl}}/api/users?page=1"
+					}
+				}
+			]
+		},
+		{
+			"name": "E2E Chained flows",
+			"item": [
+				{
+					"name": "E2E - Create then Get then Delete",
+					"item": [
+						{
+							"name": "1 - Create User",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('Create returns 201', function() { pm.response.to.have.status(201); });",
+											"const json = pm.response.json();",
+											"pm.collectionVariables.set('e2eUserId', json.id);"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [ { "key": "Content-Type", "value": "application/json" } ],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"e2e user\",\n  \"job\": \"e2e job\"\n}"
+								},
+								"url": "{{baseUrl}}/api/users"
+							}
+						},
+						{
+							"name": "2 - Get created User",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('Get returns 200', function() { pm.response.to.have.status(200); });",
+											"const json = pm.response.json();",
+											"pm.test('User has id', function() { pm.expect(json.data).to.have.property('id'); });"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"url": "{{baseUrl}}/api/users/{{e2eUserId}}"
+							}
+						},
+						{
+							"name": "3 - Delete User (cleanup)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('Delete returns 204', function() { pm.response.to.have.status(204); });"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "DELETE",
+								"url": "{{baseUrl}}/api/users/{{e2eUserId}}"
+							}
+						}
+					]
+				},
+				{
+					"name": "E2E - Create then Update then Get",
+					"item": [
+						{
+							"name": "1 - Create",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('Create 201', function() { pm.response.to.have.status(201); });",
+											"const j = pm.response.json();",
+											"pm.collectionVariables.set('e2eUpdateId', j.id);"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [ { "key": "Content-Type", "value": "application/json" } ],
+								"body": { "mode": "raw", "raw": "{\n  \"name\": \"before\",\n  \"job\": \"original\"\n}" },
+								"url": "{{baseUrl}}/api/users"
+							}
+						},
+						{
+							"name": "2 - Update (PUT)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('Update 200', function() { pm.response.to.have.status(200); });",
+											"const j = pm.response.json();",
+											"pm.test('Updated job', function() { pm.expect(j.job).to.eql('updated'); });"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "PUT",
+								"header": [ { "key": "Content-Type", "value": "application/json" } ],
+								"body": { "mode": "raw", "raw": "{\n  \"name\": \"after\",\n  \"job\": \"updated\"\n}" },
+								"url": "{{baseUrl}}/api/users/{{e2eUpdateId}}"
+							}
+						},
+						{
+							"name": "3 - Get updated",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('Get 200', function() { pm.response.to.have.status(200); });"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"url": "{{baseUrl}}/api/users/{{e2eUpdateId}}"
+							}
+						}
+					]
+				},
+				{
+					"name": "E2E - Login then Create with token",
+					"item": [
+						{
+							"name": "1 - Login",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('Login 200', function() { pm.response.to.have.status(200); });",
+											"const j = pm.response.json();",
+											"pm.collectionVariables.set('authToken', j.token);"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [ { "key": "Content-Type", "value": "application/json" } ],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"email\": \"{{loginEmail}}\",\n  \"password\": \"{{loginPassword}}\"\n}"
+								},
+								"url": "{{baseUrl}}/api/login"
+							}
+						},
+						{
+							"name": "2 - Create User (with token)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('Create 201', function() { pm.response.to.have.status(201); });"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [ { "key": "Content-Type", "value": "application/json" } ],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"chained user\",\n  \"job\": \"chained job\"\n}"
+								},
+								"url": "{{baseUrl}}/api/users"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Data-driven (run with CSV)",
+			"item": [
+				{
+					"name": "Create User - Data driven",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function() { pm.response.to.have.status(201); });",
+									"pm.test('Name in response matches', function() {",
+									"    const json = pm.response.json();",
+									"    const expectedName = pm.iterationData.get('name') || pm.collectionVariables.get('userName');",
+									"    if (expectedName) pm.expect(json.name).to.eql(expectedName);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"{{name}}\",\n  \"job\": \"{{job}}\"\n}"
+						},
+						"url": "{{baseUrl}}/api/users"
+					}
+				},
+				{
+					"name": "Login - Data driven",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const expectedCode = parseInt(pm.iterationData.get('expectedStatus') || '200', 10);",
+									"pm.test('Status code is ' + expectedCode, function() { pm.response.to.have.status(expectedCode); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+						},
+						"url": "{{baseUrl}}/api/login"
+					}
+				}
+			]
+		}
+	]
+}

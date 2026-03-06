@@ -1,0 +1,43 @@
+name: Postman API Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  newman:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Newman
+        run: npm install -g newman newman-reporter-htmlextra
+
+      - name: Run Postman collection
+        run: |
+          mkdir -p reports
+          newman run collection/API-Testing-Portfolio.postman_collection.json \
+            --environment environments/local.postman_environment.json \
+            --reporters cli,htmlextra,junit \
+            --reporter-htmlextra-export reports/newman-report.html \
+            --reporter-junit-export reports/newman-junit.xml
+
+      - name: Upload HTML report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: newman-html-report
+          path: reports/newman-report.html
+
+      - name: Publish JUnit
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: reports/newman-junit.xml
